@@ -1,0 +1,16 @@
+[package]
+name = "polychat-druid-gui"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+druid = { version = "0.8.2", features = ["svg", "im", "image", "png"]}
+piet-common = { version = "0.6.2" }
+usvg = { version = "0.14.1" }
+tracing = { version = "0.1.22" }
+rand = "0.8"
+num-traits = "0.2"
+num-derive = "0.2"
+chrono = "0.4"
