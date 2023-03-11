@@ -13,6 +13,8 @@ pub struct AppState {
     pub profile_pics: im::Vector<ImageBuf>,
     pub layout_settings: LayoutSettings,
     pub settings_open: bool,
+    pub plugin_load_status: String,
+    pub plugin_load_dir: Option<String>,
     pub plugin_list: im::Vector<PluginItemData>,
 }
 

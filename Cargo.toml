@@ -14,3 +14,7 @@ rand = "0.8"
 num-traits = "0.2"
 num-derive = "0.2"
 chrono = "0.4"
+polychat-ipc = { path = "../polychat-ipc" }
+log = "0.4.17"
+tokio = { version = "1.25.0", features=["net", "time", "io-util", "rt", "macros", "rt-multi-thread", "sync"]}
+opener = "0.5.2"

@@ -5,10 +5,19 @@ use druid::widget::prelude::*;
 use druid::im;
 use druid;
 
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+use log::warn;
+
+use tokio;
+
+// Polychat
+use polychat_ipc;
+
 use helper::layout_settings::LayoutSettings;
 
 use data::app_state_data::*;
-use data::plugin_item_data::*;
 
 mod widgets;
 mod helper;
@@ -16,6 +25,7 @@ mod data;
 mod settings_ui;
 mod chat_ui;
 mod plugin_ui;
+mod core_interface;
 
 // Env keys to define layout in the environment
 pub const ITEM_LAYOUT_KEY: druid::env::Key<u64> = druid::env::Key::new("polysoft.druid-demo.item_layout");
@@ -128,19 +138,32 @@ fn get_main_window_row() -> impl Widget<AppState> {
     
 }
 
-fn get_main_window_widget() -> impl Widget<AppState> {
+fn get_main_window_widget(tx: mpsc::Sender<bool>) -> impl Widget<AppState> {
     Flex::column()
         .with_child(Label::new("PolyChat").padding(5.0))
         .with_flex_child(get_main_window_row(), 1.0)
     .cross_axis_alignment(widget::CrossAxisAlignment::Fill)
+    .on_added( move |&mut _, _ctx: &mut LifeCycleCtx, _data: &AppState, _env: &Env| {
+        notify_gui_ready(tx.clone());
+    })
 }
 
-fn get_main_window_desc() -> WindowDesc<AppState> {
+
+fn get_main_window_desc(tx: mpsc::Sender<bool>) -> WindowDesc<AppState> {
     let main_window = WindowDesc::new(
-        get_main_window_widget()
+        get_main_window_widget(tx)
     ).window_size((900.0, 450.0));
     return main_window;
 }
+
+fn notify_gui_ready(tx: mpsc::Sender<bool>) {
+    println!("Lifecycle event hit. Sending message.");
+    let result = tx.send(true);
+    if result.is_err() {
+        warn!("Failed to send ready message from GUI. Err: {:?}", result.err())
+    }
+}
+
 fn main() -> Result<(), PlatformError> {
     // create the initial app state
     let initial_state = AppState {
@@ -149,21 +172,54 @@ fn main() -> Result<(), PlatformError> {
         profile_pics: im::vector![],
         settings_open: false,
         layout_settings: LayoutSettings::default(),
-        plugin_list: im::vector![
-            PluginItemData { plugin_name: "Example Plugin 1".to_string(), },
-            PluginItemData { plugin_name: "Example Plugin 2".to_string(), }
-        ],
+        plugin_load_status: "Not loaded.".to_string(),
+        plugin_load_dir: None,
+        plugin_list: im::vector![],
     };
 
-    AppLauncher::with_window(
-        get_main_window_desc()
+    println!("Starting the GUI.");
+    let (tx, rx) = mpsc::channel(); // A channel to send info from the UI to the core.
+    let launcher = AppLauncher::with_window(
+        get_main_window_desc(tx)
     ).delegate(
         Delegate {
             window_count: 0,
         }
-    )
-    .launch(
+    );
+    let event_sink = launcher.get_external_handle();
+    
+    let thread_handle = thread::spawn( move || {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        println!("Launching core in runtime.");
+        rt.block_on(async {
+            println!("Waiting for GUI to be ready for messages being passed over.");
+            let received = rx.recv_timeout(Duration::from_secs(1));
+            if received.is_err() || received.unwrap() == false {
+                warn!("Failed to receive GUI ready message, or it was false.");
+                println!("Failed to receive GUI ready message, or it was false.");
+            } else {
+                println!("Got GUI ready message. Starting core.");
+            }
+            thread::sleep(Duration::from_secs(1));
+            println!("Initializing core from new thread in GUI");
+            let application_core = polychat_ipc::core::Core::new_in_home();
+            let core_interface = core_interface::CoreInterface::new(event_sink);
+
+            println!("Starting core in another thread from the GUI.");
+            application_core.unwrap().run(&core_interface).unwrap();
+            thread::sleep(Duration::from_millis(20));
+        });
+    });
+
+
+    launcher.launch(
         initial_state
     )?;
+    println!("Waiting for core thread to stop");
+    thread_handle.join().unwrap();
     Ok(())
 }
