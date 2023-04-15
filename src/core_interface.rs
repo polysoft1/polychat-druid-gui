@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use polychat_ipc::core::{ui_interface::ui_trait, ui_interface::load_status::LoadStatus};
+use polychat_ipc::{core::{ui_interface::ui_trait, ui_interface::load_status::LoadStatus}, api::schema::protocol::InitDataInstruction};
 
 use crate::data::{plugin_item_data::PluginItemData, app_state_data::AppState};
 
@@ -50,12 +50,16 @@ impl CoreInterface {
         println!("on_plugin_load_failure called with error message {error_msg}.")
     }
 
-    fn on_plugin_loaded_status_change(&self, status: LoadStatus) {
+    fn on_plugins_loaded_status_change(&self, status: LoadStatus) {
         println!("on_plugin_loaded_status_change called with status {:?}.", status);
         self.event_sink.add_idle_callback(move |data: &mut AppState| {
             (*data).plugin_load_status = format!("{:?}", status).to_string();
             println!("on_plugin_loaded_status_change's callback called.");
         });
+    }
+
+    fn on_plugin_init(&self, plugin_init_data: InitDataInstruction) {
+        todo!()
     }
 
 }
